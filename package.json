@@ -1,14 +1,15 @@
 {
   "name": "ccline-quota-statusline",
   "version": "1.0.0",
-  "description": "Append API spend-quota progress bars to the CCometixLine (ccline) Claude Code status line, sourced from a Sub2API-style gateway's /v1/usage endpoint. Cross-platform (macOS / Linux / Windows).",
+  "description": "Append Sub2API spend-quota progress bars to the CCometixLine Claude Code status line.",
   "type": "module",
   "bin": {
     "ccline-quota-install": "install.mjs",
     "ccline-quota": "quota-wrapper.mjs"
   },
   "scripts": {
-    "setup": "node install.mjs"
+    "setup": "node install.mjs",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

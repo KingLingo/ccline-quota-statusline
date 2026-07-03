@@ -1,4 +1,4 @@
-<!-- Language: **English** | [中文](README.zh.md) -->
+Language: **English** | [中文](README.zh.md)
 
 # ccline-quota-statusline
 
@@ -53,7 +53,7 @@ This wrapper calls `ccline` for the normal status line, queries `/v1/usage` in p
 
 ## Install
 
-Three ways — **A/B let an AI agent wire it up, C is manual.**
+Two ways — **A lets Claude Code wire it up, B is manual.**
 
 **A. Let Claude Code do it** — paste into Claude Code:
 ```
@@ -61,13 +61,7 @@ Clone https://github.com/KingLingo/ccline-quota-statusline and run `node install
 to wire the ccline quota progress bars into my Claude Code status line. Tell me if I need to restart.
 ```
 
-**B. Let Codex do it** — in a terminal:
-```bash
-codex "Clone https://github.com/KingLingo/ccline-quota-statusline and run node install.mjs to add the ccline quota bars to my Claude Code status line"
-```
-> The progress bars are a **Claude Code status-line** feature; Codex has no equivalent command-driven status line, so this just uses Codex-the-agent to install the tool into Claude Code. To glance at quota next to a Codex session, use [Standalone usage](#standalone-usage).
-
-**C. Manual:**
+**B. Manual:**
 ```bash
 git clone https://github.com/KingLingo/ccline-quota-statusline.git
 cd ccline-quota-statusline
@@ -117,13 +111,13 @@ Copy `quota-wrapper.mjs` + `config.toml` into `~/.claude/ccline/`, then add to `
 
 ## Standalone usage
 
-Print the quota bars on demand in any terminal — no status line needed (handy next to a Codex session):
+Print the quota bars on demand in any terminal — no status line needed:
 
 ```bash
 node ~/.claude/ccline/quota-wrapper.mjs --quota
 ```
 
-It prints just the three bars (no `ccline` line). After `npm install -g` (or `npm link`) the `ccline-quota` command does the same. `--help` shows usage.
+It prints just the quota rows (no `ccline` line). After `npm install -g` (or `npm link`) the `ccline-quota` command does the same. `--help` shows usage.
 
 ---
 
@@ -155,7 +149,7 @@ Tunables live at the top of `quota-wrapper.mjs`:
 
 ### Gateway credentials
 
-By default the wrapper reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` from the environment, then from `settings.local.json`, then `settings.json`. Override just for the quota query with `QUOTA_BASE_URL` / `QUOTA_API_KEY`.
+By default the wrapper reads `ANTHROPIC_BASE_URL` plus `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` from the environment, then from `settings.local.json`, then `settings.json`. Override just for the quota query with `QUOTA_BASE_URL` / `QUOTA_API_KEY`.
 
 ---
 
@@ -163,6 +157,7 @@ By default the wrapper reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` from the
 
 - Reads the status-line JSON from **stdin**, forwards it to the real `ccline` binary for line 1.
 - In parallel, `GET {baseUrl}/v1/usage` with a **2.5 s timeout**; result cached in `~/.claude/ccline/.quota_cache.json` for **60 s** so every repaint doesn't hit the gateway.
+- Sub2API subscription responses render Daily / Weekly / Monthly rows. `quota_limited` responses render `rate_limits` rows such as `5h`, Daily, and Weekly, with the same claude-hud color semantics.
 - On any failure it serves the last cached value, or simply omits the quota rows — the status line never breaks.
 - `ccline` binary is resolved per-platform (`ccline` / `ccline.exe` in `~/.claude/ccline/`, else the `ccline` command on `PATH`).
 

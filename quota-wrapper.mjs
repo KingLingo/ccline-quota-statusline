@@ -82,32 +82,81 @@ function readJsonSafe(p) {
   }
 }
 
+function firstValue(...values) {
+  return values.find((v) => typeof v === 'string' && v.trim() !== '');
+}
+
 function loadGatewayEnv() {
   const settingsEnv = readJsonSafe(join(HOME, '.claude', 'settings.json')).env || {};
   const localEnv = readJsonSafe(join(HOME, '.claude', 'settings.local.json')).env || {};
-  const pick = (k) => process.env[k] || localEnv[k] || settingsEnv[k];
+
+  const claudeBaseUrl = firstValue(
+    process.env.ANTHROPIC_BASE_URL,
+    localEnv.ANTHROPIC_BASE_URL,
+    settingsEnv.ANTHROPIC_BASE_URL,
+  );
+  const claudeApiKey = firstValue(
+    process.env.ANTHROPIC_API_KEY,
+    process.env.ANTHROPIC_AUTH_TOKEN,
+    localEnv.ANTHROPIC_API_KEY,
+    localEnv.ANTHROPIC_AUTH_TOKEN,
+    settingsEnv.ANTHROPIC_API_KEY,
+    settingsEnv.ANTHROPIC_AUTH_TOKEN,
+  );
+
   return {
-    baseUrl: process.env.QUOTA_BASE_URL || pick('ANTHROPIC_BASE_URL'),
-    apiKey: process.env.QUOTA_API_KEY || pick('ANTHROPIC_API_KEY'),
+    baseUrl: process.env.QUOTA_BASE_URL || claudeBaseUrl,
+    apiKey: process.env.QUOTA_API_KEY || claudeApiKey,
   };
 }
 
-const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+const num = (v) => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+function usageEndpoint(baseUrl) {
+  const b = cleanInline(baseUrl).replace(/\/+$/, '');
+  if (!b) return '';
+  return /\/v1$/i.test(b) ? `${b}/usage` : `${b}/v1/usage`;
+}
+
+function normalizeRateLimits(d) {
+  const src = Array.isArray(d.rate_limits) ? d.rate_limits : [];
+  return src
+    .map((r) => {
+      if (!r || typeof r !== 'object') return null;
+      const limit = num(r.limit);
+      const used = num(r.used);
+      if (limit === undefined || used === undefined || limit <= 0) return null;
+      return {
+        window: cleanInline(r.window || r.name || r.label),
+        used,
+        limit,
+      };
+    })
+    .filter(Boolean);
+}
 
 async function fetchQuota(baseUrl, apiKey) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/usage`, {
+    const res = await fetch(usageEndpoint(baseUrl), {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
     if (!res.ok) return null;
     const d = await res.json();
     const sub = d.subscription && typeof d.subscription === 'object' ? d.subscription : {};
+    const quota = d.quota && typeof d.quota === 'object' ? d.quota : {};
     const snap = {
-      remaining: num(d.remaining),
-      unit: d.unit || 'USD',
+      remaining: num(d.remaining) ?? num(quota.remaining),
+      unit: d.unit || quota.unit || 'USD',
       planName: typeof d.planName === 'string' ? d.planName : null,
       subscription: {
         daily_usage_usd: num(sub.daily_usage_usd),
@@ -117,11 +166,18 @@ async function fetchQuota(baseUrl, apiKey) {
         monthly_usage_usd: num(sub.monthly_usage_usd),
         monthly_limit_usd: num(sub.monthly_limit_usd),
       },
+      rate_limits: normalizeRateLimits(d),
+      quota: {
+        used: num(quota.used),
+        limit: num(quota.limit),
+      },
       fetchedAt: Date.now(),
     };
     const s = snap.subscription;
     const hasWindow = s.daily_limit_usd || s.weekly_limit_usd || s.monthly_limit_usd;
-    if (!hasWindow && snap.remaining === undefined) return null;
+    const hasRateLimit = snap.rate_limits.length > 0;
+    const hasQuota = snap.quota.used !== undefined && snap.quota.limit !== undefined && snap.quota.limit > 0;
+    if (!hasWindow && !hasRateLimit && !hasQuota && snap.remaining === undefined) return null;
     return snap;
   } catch {
     return null;
@@ -206,7 +262,26 @@ function windowsFrom(q) {
     if (used === undefined || limit === undefined || limit <= 0) continue;
     out.push({ label, pct: Math.max(0, (used / limit) * 100) });
   }
+  if (out.length) return out;
+  for (const r of Array.isArray(q?.rate_limits) ? q.rate_limits : []) {
+    const label = rateLimitLabel(r.window);
+    out.push({ label, pct: Math.max(0, (r.used / r.limit) * 100) });
+  }
+  if (out.length) return out;
+  const quotaUsed = num(q?.quota?.used);
+  const quotaLimit = num(q?.quota?.limit);
+  if (quotaUsed !== undefined && quotaLimit !== undefined && quotaLimit > 0) {
+    out.push({ label: 'Quota', pct: Math.max(0, (quotaUsed / quotaLimit) * 100) });
+  }
   return out;
+}
+
+function rateLimitLabel(window) {
+  const w = cleanInline(window).toLowerCase();
+  if (w === '1d' || w === '24h' || w === 'day' || w === 'daily') return 'Daily';
+  if (w === '7d' || w === 'week' || w === 'weekly') return 'Weekly';
+  if (w === '30d' || w === 'month' || w === 'monthly') return 'Monthly';
+  return cleanInline(window || 'Limit').slice(0, LABEL_WIDTH) || 'Limit';
 }
 
 function metaFrom(q) {
@@ -232,9 +307,9 @@ function renderStacked(q) {
 function renderCompact(q) {
   const wins = windowsFrom(q);
   const meta = metaFrom(q);
-  const short = { Daily: 'D', Weekly: 'W', Monthly: 'M' };
+  const short = { Daily: 'D', Weekly: 'W', Monthly: 'M', Quota: 'Q' };
   const parts = wins.map(
-    ({ label, pct }) => `${short[label]} ${bar(pct, WIDTH_COMPACT)} ${formatPercent(pct)}`,
+    ({ label, pct }) => `${short[label] || label} ${bar(pct, WIDTH_COMPACT)} ${formatPercent(pct)}`,
   );
   if (!parts.length && !meta.length) return [];
   const segs = [];
@@ -284,7 +359,7 @@ if (argv.includes('--help') || argv.includes('-h')) {
       'As a Claude Code status line (stdin = status JSON):',
       '  set settings.local.json statusLine.command = node "<path>/quota-wrapper.mjs"',
       '',
-      'Standalone (print quota bars in any terminal, e.g. next to Codex):',
+      'Standalone (print quota bars in any terminal):',
       '  node quota-wrapper.mjs --quota',
       '',
       'Env: QUOTA_MODE=stacked|compact|off  QUOTA_BASE_URL=  QUOTA_API_KEY=',
