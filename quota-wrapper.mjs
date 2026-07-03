@@ -6,15 +6,16 @@
 //
 // Cross-platform (macOS / Linux / Windows). Renders under ccline's normal line:
 //    <ccline: model | dir | git | context | cost>
-//    quota  Daily   █░░░░░░░░░░░░░   3%  $67.8 left  Claude - 300档
-//           Weekly  █░░░░░░░░░░░░░   1%
-//           Monthly ░░░░░░░░░░░░░░  <1%
+//    Daily   █░░░░░░░░░░░░░   3%  $67.8 left  Claude - 300档
+//    Weekly  █░░░░░░░░░░░░░   1%
+//    Monthly ░░░░░░░░░░░░░░  <1%
 //
-// Bar coloring follows claude-hud semantics; the aligned-column layout + color
-// scheme were designed with GPT-5.5. Every quota row starts with an identical
-// pure-ASCII prefix so bars align regardless of emoji/font width (the alignment
-// fix). Empty cells dim-gray; labels/metadata stay terminal-default for legibility
-// on light and dark backgrounds (incl. Windows Terminal).
+// Bar coloring follows claude-hud semantics; layout + color scheme designed with
+// GPT-5.5. Alignment: Claude Code strips each row's leading whitespace and applies
+// its own uniform indent, so rows carry NO leading spaces and start directly with
+// an equal-width (padEnd) label — bars line up whether or not the host re-indents,
+// with no dependence on emoji/font width. Empty cells dim-gray; labels/metadata
+// stay terminal-default for legibility on light and dark backgrounds (incl. Windows).
 //
 // Env toggles:
 //   QUOTA_MODE=stacked|compact|off   force a layout (default: auto by width)
@@ -151,8 +152,9 @@ async function getQuota(baseUrl, apiKey) {
 const WIDTH = 14; // stacked bar width in cells
 const WIDTH_COMPACT = 6; // compact bar width in cells
 const LABEL_WIDTH = 7; // "Monthly" is the longest window label
-const GUTTER = 'quota  '; // constant-width, pure-ASCII prefix (shown on row 0)
-const GUTTER_BLANK = ' '.repeat(GUTTER.length);
+// NB: Claude Code strips leading whitespace from each status-line row and applies
+// its own uniform indent, so alignment must NOT rely on leading spaces. Every row
+// therefore starts directly with its equal-width (padEnd) label — no gutter.
 
 const WINDOWS = [
   ['Daily', 'daily_usage_usd', 'daily_limit_usd'],
@@ -218,11 +220,10 @@ function metaFrom(q) {
 function renderStacked(q) {
   const wins = windowsFrom(q);
   const meta = metaFrom(q);
-  if (!wins.length) return meta.length ? [`  ${GUTTER}${meta.join('  ')}`] : [];
-  const rows = wins.map(({ label, pct }, i) => {
-    const gutter = i === 0 ? GUTTER : GUTTER_BLANK;
+  if (!wins.length) return meta.length ? [meta.join('  ')] : [];
+  const rows = wins.map(({ label, pct }) => {
     const pctStr = formatPercent(pct).padStart(4, ' ');
-    return `  ${gutter}${label.padEnd(LABEL_WIDTH)} ${bar(pct, WIDTH)} ${pctStr}`;
+    return `${label.padEnd(LABEL_WIDTH)} ${bar(pct, WIDTH)} ${pctStr}`;
   });
   if (meta.length) rows[0] += `  ${meta.join('  ')}`;
   return rows;
@@ -236,7 +237,7 @@ function renderCompact(q) {
     ({ label, pct }) => `${short[label]} ${bar(pct, WIDTH_COMPACT)} ${formatPercent(pct)}`,
   );
   if (!parts.length && !meta.length) return [];
-  const segs = [`  ${GUTTER}`.trimEnd()];
+  const segs = [];
   if (parts.length) segs.push(parts.join(`${DIM_GRAY} · ${RESET}`));
   if (meta.length) segs.push(meta.join('  '));
   return [segs.join('  ')];

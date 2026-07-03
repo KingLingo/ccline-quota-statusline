@@ -4,10 +4,12 @@ Append **API spend-quota progress bars** to the [CCometixLine](https://github.co
 
 ```
 🤖 Sonnet 5 | 📁 Downloads | 🌿 main | ⚡️ 12% · 45k tokens | 💰 $0.42
-  quota  Daily   ███░░░░░░░░░░░   7%  $65.01 left  Claude - 300档
-         Weekly  █░░░░░░░░░░░░░   3%
-         Monthly ░░░░░░░░░░░░░░  <1%
+Daily   ███░░░░░░░░░░░   7%  $65.01 left  Claude - 300档
+Weekly  █░░░░░░░░░░░░░   3%
+Monthly ░░░░░░░░░░░░░░  <1%
 ```
+
+> Rows carry **no leading whitespace** and start with an equal-width (`padEnd`) label, so the bars align even though Claude Code strips each row's leading spaces and re-indents the whole status line uniformly. (Earlier gutter/emoji-prefixed layouts broke because that leading space got stripped.)
 
 - The first line is CCometixLine's normal output (model / dir / git / context / cost).
 - The **quota rows** are added by this project: one progress bar per spend window (Daily / Weekly / Monthly), plus remaining balance and plan name.
@@ -104,7 +106,7 @@ Copy `quota-wrapper.mjs` + `config.toml` into `~/.claude/ccline/`, then add to `
 |-------|--------|
 | *(unset)* | **auto**: stacked bars normally, compact single row when the terminal is narrow (< 72 cols) |
 | `stacked` | force the multi-row stacked bars |
-| `compact` | force one compact row: `quota  D █░░ 7% · W █░░ 3% · M ░░ <1%  $65 left` |
+| `compact` | force one compact row: `D █░░ 7% · W █░░ 3% · M ░░ <1%  $65 left` |
 | `off` | hide quota rows (plain `ccline` only) |
 
 Set it in your shell profile or in the `env` block of `settings.local.json`.
@@ -145,7 +147,7 @@ By default the wrapper reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` from the
 | Status line lost after changing model | Expected — Claude Code rewrote `settings.json`. Keep `statusLine` in `settings.local.json` (the installer does). |
 | Bars render but no quota rows | Your gateway may not serve `GET /v1/usage`, or the key is invalid. Test: `curl -H "Authorization: Bearer $KEY" $BASE/v1/usage`. |
 | Boxes/`?` instead of `█ ░` on Windows | Use Windows Terminal with a modern font; legacy `conhost` with raster fonts can't render block elements. |
-| Misaligned columns | Shouldn't happen — rows use a pure-ASCII prefix. If it does, your terminal font may render `█`/`░` as non-single-width; try a different monospace font. |
+| Misaligned columns | Rows have no leading whitespace and start with an equal-width label, so alignment survives Claude Code's per-row leading-space stripping. If bars still drift, your font may render `█`/`░` as non-single-width — try a different monospace font. |
 
 ---
 
