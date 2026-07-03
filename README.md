@@ -1,3 +1,5 @@
+<!-- Language: **English** | [中文](README.zh.md) -->
+
 # ccline-quota-statusline
 
 Append **API spend-quota progress bars** to the [CCometixLine](https://github.com/LemonYangZW/CCometixLine) (`ccline`) Claude Code status line — sourced from a **Sub2API-style gateway's self-service `GET /v1/usage`** endpoint, using the API key you already have. **No admin credentials required.** Cross-platform: macOS / Linux / Windows.
@@ -51,8 +53,23 @@ This wrapper calls `ccline` for the normal status line, queries `/v1/usage` in p
 
 ## Install
 
+Three ways — **A/B let an AI agent wire it up, C is manual.**
+
+**A. Let Claude Code do it** — paste into Claude Code:
+```
+Clone https://github.com/KingLingo/ccline-quota-statusline and run `node install.mjs`
+to wire the ccline quota progress bars into my Claude Code status line. Tell me if I need to restart.
+```
+
+**B. Let Codex do it** — in a terminal:
 ```bash
-git clone https://github.com/<you>/ccline-quota-statusline.git
+codex "Clone https://github.com/KingLingo/ccline-quota-statusline and run node install.mjs to add the ccline quota bars to my Claude Code status line"
+```
+> The progress bars are a **Claude Code status-line** feature; Codex has no equivalent command-driven status line, so this just uses Codex-the-agent to install the tool into Claude Code. To glance at quota next to a Codex session, use [Standalone usage](#standalone-usage).
+
+**C. Manual:**
+```bash
+git clone https://github.com/KingLingo/ccline-quota-statusline.git
 cd ccline-quota-statusline
 node install.mjs
 ```
@@ -95,6 +112,18 @@ Copy `quota-wrapper.mjs` + `config.toml` into `~/.claude/ccline/`, then add to `
 }
 ```
 > The installer writes `node "<absolute wrapper path>"` (quoted). If `node` isn't on the status-line PATH, replace it with the absolute path to `node.exe`.
+
+---
+
+## Standalone usage
+
+Print the quota bars on demand in any terminal — no status line needed (handy next to a Codex session):
+
+```bash
+node ~/.claude/ccline/quota-wrapper.mjs --quota
+```
+
+It prints just the three bars (no `ccline` line). After `npm install -g` (or `npm link`) the `ccline-quota` command does the same. `--help` shows usage.
 
 ---
 

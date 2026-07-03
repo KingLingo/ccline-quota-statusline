@@ -248,10 +248,12 @@ function terminalCols() {
   return Number.isFinite(c) && c > 0 ? c : null;
 }
 
-function renderQuotaRows(q) {
+function renderQuotaRows(q, standalone = false) {
   if (!q) return [];
   try {
-    const mode = (process.env.QUOTA_MODE || '').toLowerCase();
+    let mode = (process.env.QUOTA_MODE || '').toLowerCase();
+    // In standalone (`--quota`) mode the user asked to see quota, so never hide it.
+    if (standalone && (mode === '' || mode === 'off')) mode = 'stacked';
     if (mode === 'off') return [];
     if (mode === 'compact') return renderCompact(q);
     if (mode === 'stacked') return renderStacked(q);
@@ -273,14 +275,37 @@ function readStdin() {
   });
 }
 
-const stdinData = await readStdin();
+const argv = process.argv.slice(2);
+if (argv.includes('--help') || argv.includes('-h')) {
+  process.stdout.write(
+    [
+      'ccline-quota-statusline — API spend-quota progress bars',
+      '',
+      'As a Claude Code status line (stdin = status JSON):',
+      '  set settings.local.json statusLine.command = node "<path>/quota-wrapper.mjs"',
+      '',
+      'Standalone (print quota bars in any terminal, e.g. next to Codex):',
+      '  node quota-wrapper.mjs --quota',
+      '',
+      'Env: QUOTA_MODE=stacked|compact|off  QUOTA_BASE_URL=  QUOTA_API_KEY=',
+    ].join('\n') + '\n',
+  );
+  process.exit(0);
+}
+
+// Standalone mode: explicit --quota/--standalone, or an interactive TTY (no piped
+// status JSON). Prints only the quota bars — skips ccline and the stdin wait.
+const standalone =
+  argv.includes('--quota') || argv.includes('--standalone') || Boolean(process.stdin.isTTY);
+
 const { baseUrl, apiKey } = loadGatewayEnv();
+const stdinData = standalone ? '' : await readStdin();
 
 const [baseLine, quota] = await Promise.all([
-  runCcline(stdinData),
+  standalone ? Promise.resolve('') : runCcline(stdinData),
   baseUrl && apiKey ? getQuota(baseUrl, apiKey) : Promise.resolve(null),
 ]);
 
-const base = baseLine.replace(/\n+$/, '');
-const rows = renderQuotaRows(quota);
-process.stdout.write([base, ...rows].join('\n') + '\n');
+const rows = renderQuotaRows(quota, standalone);
+const lines = standalone ? rows : [baseLine.replace(/\n+$/, ''), ...rows];
+process.stdout.write(lines.join('\n') + (lines.length ? '\n' : ''));
